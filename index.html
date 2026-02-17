@@ -1,40 +1,26 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Админка - Исправлено</title>
+    <title>ADMIN PANEL</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        /* Жестко фиксируем, чтобы ничего не вылетало */
-        html, body { margin: 0; padding: 0; height: 100%; width: 100%; background: #f0f0f0; }
-        #map { 
-            height: 100vh !important; 
-            width: 100vw !important; 
-            display: block;
-            background: #e5e3df; /* Цвет-заглушка, пока грузится карта */
-        }
-        .ui-element { position: absolute; z-index: 1000; }
-        .controls-panel { 
-            top: 10px; right: 10px; width: 160px; 
-            background: white; padding: 10px; 
-            border: 2px solid #333; border-radius: 8px;
-            display: flex; flex-direction: column; gap: 5px;
-        }
-        .btn { cursor: pointer; padding: 8px; font-weight: bold; font-size: 11px; display: flex; align-items: center; gap: 5px; background: #eee; border: 1px solid #999; }
-        .btn.active { background: #007bff; color: white; border-color: #0056b3; }
+        html, body { margin: 0; padding: 0; height: 100%; width: 100%; }
+        #map { height: 100vh !important; width: 100vw !important; background: #ddd; }
+        .menu { position: absolute; top: 10px; right: 10px; z-index: 9999; background: white; padding: 10px; border: 2px solid black; display: flex; flex-direction: column; gap: 5px; }
+        button { cursor: pointer; padding: 5px; font-weight: bold; }
         .unit-icon { width: 30px; height: 30px; }
     </style>
 </head>
 <body>
-    <div class="controls-panel ui-element">
-        <button class="btn" onclick="setActiveMode('shahed', 's1.png')">ШАХЕД</button>
-        <button class="btn" onclick="setActiveMode('kab', 'kab.png')">КАБ</button>
-        <button class="btn" onclick="setActiveMode('su34', 'su34.png')">СУ-34</button>
+    <div class="menu">
+        <button onclick="setActiveMode('shahed', 's1.png')">ШАХЕД</button>
+        <button onclick="setActiveMode('kab', 'kab.png')">КАБ</button>
+        <button onclick="setActiveMode('su34', 'su34.png')">СУ-34</button>
         <hr>
-        <button class="btn" id="statusBtn" onclick="toggleMapStatus()">🟢 КАРТА ОТКРЫТА</button>
-        <button class="btn" style="color:red" onclick="setActiveMode('delete_one')">🗑️ УДАЛИТЬ</button>
-        <button class="btn" style="color:red" onclick="clearAllData()">⚠️ ОЧИСТИТЬ</button>
+        <button id="statusBtn" onclick="toggleMapStatus()" style="background: lightgreen;">🟢 КАРТА ОТКРЫТА</button>
+        <button onclick="setActiveMode('delete_one', '')" style="color: red;">🗑️ УДАЛИТЬ ОДНУ</button>
+        <button onclick="clearAll()" style="color: red;">⚠️ ОЧИСТИТЬ ВСЁ</button>
     </div>
 
     <div id="map"></div>
@@ -48,71 +34,55 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
 
-        // Инициализация карты с задержкой, чтобы DOM успел прогрузиться
-        const map = L.map('map').setView([48.3794, 31.1656], 6);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '© OpenStreetMap'
-        }).addTo(map);
+        const map = L.map('map').setView([48.3, 31.1], 6);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-        // Принудительно лечим "серые квадраты" или белый экран
-        setTimeout(() => { map.invalidateSize(); }, 200);
-
-        let units = [], activeMode = null, activeIconUrl = '', currentUnit = null, mapActive = true;
+        let units = [], activeMode = null, activeIcon = '', currentUnit = null, mapActive = true;
 
         window.toggleMapStatus = () => {
             mapActive = !mapActive;
             document.getElementById('statusBtn').innerText = mapActive ? "🟢 КАРТА ОТКРЫТА" : "🔴 КАРТА ЗАКРЫТА";
+            document.getElementById('statusBtn').style.background = mapActive ? "lightgreen" : "red";
             set(ref(db, 'map_status'), { active: mapActive });
         };
 
-        window.setActiveMode = (mode, icon = '') => {
-            activeMode = mode; activeIconUrl = icon;
-            document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
-            if(event) event.currentTarget.classList.add('active');
-        };
+        window.setActiveMode = (mode, icon) => { activeMode = mode; activeIcon = icon; currentUnit = null; };
 
-        window.clearAllData = () => {
-            if(confirm("Удалить всё?")) {
-                units.forEach(u => { map.removeLayer(u.marker); map.removeLayer(u.line); });
-                units = []; set(ref(db, 'live_units'), []);
-            }
-        };
+        window.clearAll = () => { if(confirm('Удалить всё?')) { units.forEach(u => {map.removeLayer(u.m); map.removeLayer(u.l);}); units=[]; sync(); } };
 
         map.on('click', (e) => {
             if (activeMode === 'delete_one') return;
-            if (activeIconUrl && !currentUnit) {
-                const u = { id: Date.now(), pos: e.latlng, type: activeMode, iconUrl: activeIconUrl, angle: 0, target: null };
-                addMarker(u); units.push(u); currentUnit = u;
-                sync();
+            if (activeIcon && !currentUnit) {
+                const u = { id: Date.now(), pos: e.latlng, type: activeMode, icon: activeIcon, ang: 0, target: null };
+                addU(u); units.push(u); currentUnit = u; sync();
             } else if (currentUnit) {
                 currentUnit.target = e.latlng;
-                currentUnit.angle = Math.atan2(e.latlng.lng - currentUnit.pos.lng, e.latlng.lat - currentUnit.pos.lat) * 180 / Math.PI;
-                updateU(currentUnit); currentUnit = null; sync();
+                currentUnit.ang = Math.atan2(e.latlng.lng - currentUnit.pos.lng, e.latlng.lat - currentUnit.pos.lat) * 180 / Math.PI;
+                updU(currentUnit); currentUnit = null; sync();
             }
         });
 
-        function addMarker(u) {
-            const icon = L.divIcon({ html: `<img src="${u.iconUrl}" class="unit-icon" style="transform:rotate(${u.angle}deg)">`, iconSize:[30,30], iconAnchor:[15,15], className:'' });
-            u.marker = L.marker(u.pos, {icon:icon, draggable:true}).addTo(map);
-            u.line = L.polyline([u.pos, u.target||u.pos], {color:'blue', weight:2, dashArray:'5,5'}).addTo(map);
-            u.marker.on('drag', (e) => { u.pos = e.latlng; updateU(u); });
-            u.marker.on('dragend', () => sync());
-            u.marker.on('click', (ev) => {
+        function addU(u) {
+            const icon = L.divIcon({ html: `<img src="${u.icon}" class="unit-icon" style="transform:rotate(${u.ang}deg)">`, iconSize:[30,30], iconAnchor:[15,15], className:'' });
+            u.m = L.marker(u.pos, {icon:icon, draggable:true}).addTo(map);
+            u.l = L.polyline([u.pos, u.target||u.pos], {color:'blue', weight:2, dashArray:'5,5'}).addTo(map);
+            u.m.on('drag', (e) => { u.pos = e.latlng; updU(u); });
+            u.m.on('dragend', () => sync());
+            u.m.on('click', (ev) => {
                 L.DomEvent.stopPropagation(ev);
-                if(activeMode==='delete_one') { map.removeLayer(u.marker); map.removeLayer(u.line); units=units.filter(i=>i.id!==u.id); sync(); }
+                if(activeMode==='delete_one') { map.removeLayer(u.m); map.removeLayer(u.l); units=units.filter(i=>i.id!==u.id); sync(); }
                 else currentUnit = u;
             });
         }
 
-        function updateU(u) {
-            u.marker.setLatLng(u.pos); u.line.setLatLngs([u.pos, u.target||u.pos]);
-            const img = u.marker.getElement()?.querySelector('img');
-            if(img) img.style.transform = `rotate(${u.angle}deg)`;
+        function updU(u) {
+            u.m.setLatLng(u.pos); u.l.setLatLngs([u.pos, u.target||u.pos]);
+            const img = u.m.getElement()?.querySelector('img');
+            if(img) img.style.transform = `rotate(${u.ang}deg)`;
         }
 
         function sync() {
-            const data = units.map(u => ({ id: u.id, lat: u.pos.lat, lng: u.pos.lng, targetLat: u.target?.lat, targetLng: u.target?.lng, type: u.type, angle: u.angle, iconUrl: u.iconUrl }));
+            const data = units.map(u => ({ id: u.id, lat: u.pos.lat, lng: u.pos.lng, tLat: u.target?.lat, tLng: u.target?.lng, type: u.type, ang: u.ang, icon: u.icon }));
             set(ref(db, 'live_units'), data);
         }
     </script>
