@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Админ-панель Мониторинга</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; font-family: 'Segoe UI', sans-serif; overflow: hidden; background: #000; }
+        #map { height: 100vh; width: 100vw; z-index: 1; }
+
+        /* UI Элементы */
+        .ui-element { position: absolute; z-index: 1000; transition: opacity 0.3s; }
+        
+        .stats-panel {
+            top: 10px; left: 10px;
+            background: rgba(0, 0, 0, 0.85); color: white;
+            padding: 10px; border-radius: 8px; border: 1px solid #444;
+            font-size: 11px; line-height: 1.4; pointer-events: none;
+        }
+        .stats-panel b { color: #ff0000; }
+
+        .controls-panel {
+            top: 10px; right: 10px;
+            display: flex; flex-direction: column; gap: 4px;
+            width: 150px; max-height: 90vh; overflow-y: auto;
+        }
+
+        .btn {
+            background: rgba(25, 25, 25, 0.95); color: white;
+            border: 1px solid #444; padding: 6px; border-radius: 5px;
+            cursor: pointer; font-weight: bold; font-size: 10px;
+            display: flex; align-items: center; gap: 8px; text-transform: uppercase;
+        }
+        .btn img { width: 18px; height: 18px; object-fit: contain; pointer-events: none; }
+        .btn:hover { background: #333; }
+        .btn.active { background: #ff0000; border-color: #fff; }
+        
+        .btn-danger { border-color: #ff4444; color: #ff4444; justify-content: center; }
+        .btn-danger.active { background: #ff4444 !important; color: white !important; }
+
+        .unit-icon { display: block; pointer-events: none; width: 30px !important; height: 30px !important; transition: transform 0.1s linear; }
+        .selected-unit { filter: drop-shadow(0 0 5px red); outline: 2px solid #ff0000; border-radius: 50%; }
+    </style>
+</head>
+<body>
+
+    <div class="stats-panel ui-element" id="statsPanel">
+        <div>Всего целей: <b id="count-all">0</b></div>
+        <div id="type-counts"></div>
+    </div>
+
+    <div class="controls-panel ui-element" id="mainControls">
+        <button class="btn" onclick="setActiveMode('shahed', 's1.png')"><img src="s1.png"> ШАХЕД v1</button>
+        <button class="btn" onclick="setActiveMode('shahed2', 's2.png')"><img src="s2.png"> ШАХЕД v2</button>
+        <button class="btn" onclick="setActiveMode('scout', 'orlan.png')"><img src="orlan.png"> РАЗВЕДЧИК</button>
+        <button class="btn" onclick="setActiveMode('zala', 'zala.png')"><img src="zala.png"> ZALA</button>
+        <button class="btn" onclick="setActiveMode('kab', 'kab.png')"><img src="kab.png"> КАБ</button>
+        <button class="btn" onclick="setActiveMode('kar', 'kr.png')"><img src="kr.png"> КАР</button>
+        <button class="btn" onclick="setActiveMode('air-missile', 'PR.png')"><img src="PR.png"> РАКЕТА В-В</button>
+        <button class="btn" onclick="setActiveMode('uav-unknown', 'uav.png')"><img src="uav.png"> НЕУСТ.</button>
+        <button class="btn" onclick="setActiveMode('su34', 'su34.png')"><img src="su34.png"> СУ-34</button>
+        <button class="btn" onclick="setActiveMode('r-shahed', 'react.png')"><img src="react.png"> РЕАКТИВ</button>
+        
+        <hr style="width:100%; border:0; border-top:1px solid #444;">
+        
+        <button class="btn btn-danger" id="deleteBtn" onclick="setActiveMode('delete_one')">🗑️ УДАЛИТЬ ОДНУ</button>
+        <button class="btn btn-danger" onclick="clearAllData()">⚠️ ОЧИСТИТЬ ВСЁ</button>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        // КОНФИГ ТВОЕЙ БАЗЫ
+        const firebaseConfig = { databaseURL: "https://map-objects-75fa0-default-rtdb.europe-west1.firebasedatabase.app/" };
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        const map = L.map('map', { zoomControl: true }).setView([48.3794, 31.1656], 6);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        const SPEEDS = { 
+            'shahed': 180, 'shahed2': 200, 'scout': 120, 'zala': 100, 
+            'kab': 900, 'kar': 850, 'air-missile': 2500, 'uav-unknown': 150, 
+            'su34': 950, 'r-shahed': 450 
+        };
+        const M_LAT = 111320;
+
+        let activeMode = null;
+        let activeIconUrl = '';
+        let currentUnit = null;
+        let units = [];
+
+        // Синхронизация с Firebase
+        function sync() {
+            const data = units.map(u => ({
+                id: u.id, lat: u.pos.lat, lng: u.pos.lng,
+                targetLat: u.target ? u.target.lat : null,
+                targetLng: u.target ? u.target.lng : null,
+                type: u.type, angle: u.angle || 0, iconUrl: u.iconUrl
+            }));
+            set(ref(db, 'live_units'), data);
+        }
+
+        // Переключение режимов
+        window.setActiveMode = (mode, icon = '') => {
+            activeMode = mode;
+            activeIconUrl = icon;
+            currentUnit = null;
+            document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            
+            // Сброс визуального выделения
+            units.forEach(u => { if(u.marker.getElement()) u.marker.getElement().querySelector('img').classList.remove('selected-unit'); });
+        };
+
+        // Полная очистка
+        window.clearAllData = () => {
+            if(confirm("Удалить все цели?")) {
+                units.forEach(u => { map.removeLayer(u.marker); if(u.line) map.removeLayer(u.line); });
+                units = [];
+                sync();
+                updateStats();
+            }
+        };
+
+        // Клик по карте
+        map.on('click', (e) => {
+            if (activeMode === 'delete_one') return;
+
+            if (activeIconUrl && !currentUnit) {
+                const newUnit = {
+                    id: Date.now(),
+                    pos: e.latlng,
+                    target: null,
+                    type: activeMode,
+                    iconUrl: activeIconUrl,
+                    angle: 0
+                };
+                addMarkerToMap(newUnit);
+                units.push(newUnit);
+                currentUnit = newUnit; // Ждем второго клика для вектора
+                sync();
+            } else if (currentUnit) {
+                // Установка вектора
+                currentUnit.target = e.latlng;
+                currentUnit.angle = Math.atan2(e.latlng.lng - currentUnit.pos.lng, e.latlng.lat - currentUnit.pos.lat) * 180 / Math.PI;
+                currentUnit = null;
+                sync();
+            }
+            updateStats();
+        });
+
+        function addMarkerToMap(u) {
+            const icon = L.divIcon({
+                className: 'custom-div',
+                html: `<img src="${u.iconUrl}" class="unit-icon" style="transform:rotate(${u.angle}deg)">`,
+                iconSize: [30, 30], iconAnchor: [15, 15]
+            });
+            u.marker = L.marker(u.pos, { icon: icon }).addTo(map);
+            u.line = L.polyline([u.pos, u.target || u.pos], { color: 'red', weight: 2, dashArray: '5, 5' }).addTo(map);
+
+            u.marker.on('click', (ev) => {
+                L.DomEvent.stopPropagation(ev);
+                if (activeMode === 'delete_one') {
+                    map.removeLayer(u.marker);
+                    map.removeLayer(u.line);
+                    units = units.filter(item => item.id !== u.id);
+                    sync();
+                    updateStats();
+                } else {
+                    currentUnit = u;
+                    u.marker.getElement().querySelector('img').classList.add('selected-unit');
+                }
+            });
+        }
+
+        function updateStats() {
+            document.getElementById('count-all').innerText = units.length;
+        }
+
+        // Цикл движения (100мс для плавности)
+        setInterval(() => {
+            let hasMovement = false;
+            units.forEach(u => {
+                if (!u.target) return;
+                
+                const speed = (SPEEDS[u.type] || 150) / 360; // метров за 100мс
+                const dist = map.distance(u.pos, u.target);
+
+                if (dist > speed) {
+                    hasMovement = true;
+                    const rad = (u.angle - 90) * Math.PI / 180;
+                    const newLat = u.pos.lat + (speed * Math.cos(rad)) / M_LAT;
+                    const newLng = u.pos.lng + (speed * Math.sin(rad)) / (M_LAT * Math.cos(u.pos.lat * Math.PI / 180));
+                    
+                    u.pos = L.latLng(newLat, newLng);
+                    u.marker.setLatLng(u.pos);
+                    u.line.setLatLngs([u.pos, u.target]);
+                    
+                    const img = u.marker.getElement()?.querySelector('img');
+                    if (img) img.style.transform = `rotate(${u.angle}deg)`;
+                } else {
+                    u.pos = u.target;
+                    u.target = null;
+                    u.line.setLatLngs([]);
+                }
+            });
+            // Синхронизируем базу только если есть движение, чтобы не спамить
+            if (hasMovement) sync();
+        }, 100);
+
+    </script>
+</body>
+</html>
