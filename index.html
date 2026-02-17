@@ -184,32 +184,7 @@
             document.getElementById('count-all').innerText = units.length;
         }
 
-        // Цикл движения (100мс для плавности)
-        setInterval(() => {
-            let hasMovement = false;
-            units.forEach(u => {
-                if (!u.target) return;
-                
-                const speed = (SPEEDS[u.type] || 150) / 360; // метров за 100мс
-                const dist = map.distance(u.pos, u.target);
-
-                if (dist > speed) {
-                    hasMovement = true;
-                    const rad = (u.angle - 90) * Math.PI / 180;
-                    const newLat = u.pos.lat + (speed * Math.cos(rad)) / M_LAT;
-                    const newLng = u.pos.lng + (speed * Math.sin(rad)) / (M_LAT * Math.cos(u.pos.lat * Math.PI / 180));
-                    
-                    u.pos = L.latLng(newLat, newLng);
-                    u.marker.setLatLng(u.pos);
-                    u.line.setLatLngs([u.pos, u.target]);
-                    
-                    const img = u.marker.getElement()?.querySelector('img');
-                    if (img) img.style.transform = `rotate(${u.angle}deg)`;
-                } else {
-                    u.pos = u.target;
-                    u.target = null;
-                    u.line.setLatLngs([]);
-                }
+        
             });
             // Синхронизируем базу только если есть движение, чтобы не спамить
             if (hasMovement) sync();
