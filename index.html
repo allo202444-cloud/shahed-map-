@@ -1,3 +1,4 @@
+Данил, [20.02.2026 14:34]
 <!DOCTYPE html>
 <html lang="uk">
 <head>
@@ -85,11 +86,12 @@
                 // Використовуємо DivIcon для сумісності з механікою повороту CSS
                 const iconHTML = L.divIcon({
                     className: 'custom-icon',
-                    html: `<img src="${activeIcon}" class="unit-icon" style="transform: rotate(0deg);">`,
+                    html: <img src="${activeIcon}" class="unit-icon" style="transform: rotate(0deg);">,
                     iconSize: [32, 32], iconAnchor: [16, 16]
                 });
 
-                const marker = L.marker(e.latlng, { icon: iconHTML }).addTo(map);
+Данил, [20.02.2026 14:34]
+const marker = L.marker(e.latlng, { icon: iconHTML }).addTo(map);
                 const vector = L.polyline([e.latlng, e.latlng], { color: 'blue', weight: 2, dashArray: '5,5' }).addTo(map);
                 const trail = L.polyline([e.latlng], { color: '#FF0000', weight: 5, opacity: 0.6, lineJoin: 'round' }).addTo(map);
 
@@ -124,7 +126,7 @@
                 
                 // Механіка повороту зображення через CSS
                 const img = currentUnit.marker.getElement().querySelector('img');
-                if(img) img.style.transform = `rotate(${uAngle}deg)`;
+                if(img) img.style.transform = rotate(${uAngle}deg);
                 
                 currentUnit.moving = true;
                 currentUnit = null;
