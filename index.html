@@ -1,165 +1,161 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="uk">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Админка - Управление картой</title>
+    <title>Адмінка: Авто-рух та слід</title>
+    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        body, html { margin: 0; padding: 0; height: 100%; font-family: 'Segoe UI', sans-serif; overflow: hidden; background: #f0f0f0; }
-        #map { height: 100vh; width: 100vw; z-index: 1; background: #f0f0f0; }
-        .ui-element { position: absolute; z-index: 1000; }
-        .controls-panel { top: 10px; right: 10px; display: flex; flex-direction: column; gap: 4px; width: 160px; background: rgba(0,0,0,0.85); padding: 8px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        .btn { background: #222; color: white; border: 1px solid #444; padding: 8px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 10px; display: flex; align-items: center; gap: 8px; text-transform: uppercase; transition: 0.2s; }
-        .btn img { width: 18px; height: 18px; pointer-events: none; background: rgba(255,255,255,0.1); border-radius: 2px; }
-        .btn:hover { background: #333; }
-        .btn.active { background: #0088ff; border-color: #fff; }
-        .btn-danger { border-color: #ff4444; color: #ff4444; justify-content: center; }
-        .btn-status { background: #333; border: 1px solid #555; margin-top: 5px; justify-content: center; }
-        .unit-icon { display: block; pointer-events: none; width: 30px !important; height: 30px !important; }
+        body, html { margin: 0; padding: 0; height: 100%; font-family: sans-serif; overflow: hidden; background: #000; }
+        #map { height: 100vh; width: 100vw; z-index: 1; }
+        
+        .panel { 
+            position: absolute; top: 10px; right: 10px; z-index: 1000; 
+            background: rgba(255, 255, 255, 0.9); padding: 10px; 
+            border-radius: 8px; display: flex; flex-direction: column; gap: 5px; 
+            border: 1px solid #333; width: 160px;
+        }
+        
+        .btn { 
+            cursor: pointer; padding: 8px; font-weight: bold; font-size: 11px; 
+            border: 1px solid #999; background: #fff; text-align: left;
+            display: flex; align-items: center; gap: 5px;
+        }
+        .btn img { width: 20px; height: 20px; object-fit: contain; }
+        .btn.active { background: #ff4444; color: white; border-color: red; }
+        
+        .unit-icon { 
+            display: block; width: 32px !important; height: 32px !important; 
+            transition: transform 0.1s linear; 
+        }
     </style>
 </head>
 <body>
 
-    <div class="controls-panel ui-element">
-        <button class="btn" onclick="setActiveMode('shahed', 's1.png', this)"><img src="s1.png"> ШАХЕД</button>
-        <button class="btn" onclick="setActiveMode('kab', 'kab.png', this)"><img src="kab.png"> КАБ</button>
-        <button class="btn" onclick="setActiveMode('su34', 'su34.png', this)"><img src="su34.png"> СУ-34</button>
-        <button class="btn" onclick="setActiveMode('uav-unknown', 'uav.png', this)"><img src="uav.png"> НЕУСТ.</button>
+    <div class="panel">
+        <button class="btn" onclick="setMode('sh', 's1.png')"><img src="s1.png"> ШАХЕД</button>
         
-        <hr style="width:100%; border:0; border-top:1px solid #444; margin: 5px 0;">
+        <button class="btn" onclick="setMode('zala', 'https://image2url.com/r2/default/images/1769866607142-afcdd360-ecda-4262-b039-d4bb7969d62f.png')">
+            <img src="https://image2url.com/r2/default/images/1769866607142-afcdd360-ecda-4262-b039-d4bb7969d62f.png"> ZALA
+        </button>
+
+        <button class="btn" onclick="setMode('orlan', 'https://image2url.com/r2/default/images/1770670326543-8141ee72-84e1-4407-b42a-ec65d4df9ca2.png')">
+            <img src="https://image2url.com/r2/default/images/1770670326543-8141ee72-84e1-4407-b42a-ec65d4df9ca2.png"> ОРЛАН-10
+        </button>
+
+        <button class="btn" onclick="setMode('kb', 'kab.png')"><img src="kab.png"> КАБ</button>
+        <button class="btn" onclick="setMode('su', 'su34.png')"><img src="su34.png"> СУ-34</button>
         
-        <button class="btn btn-status" id="statusBtn" onclick="toggleMapStatus()">🟢 КАРТА ОТКРЫТА</button>
-        <button class="btn btn-danger" onclick="setActiveMode('delete_one', '', this)">🗑️ УДАЛИТЬ ОДНУ</button>
-        <button class="btn btn-danger" onclick="clearAllData()">⚠️ ОЧИСТИТИ ВСЕ</button>
+        <hr style="width:100%">
+        <button class="btn" style="color:red" onclick="setMode('del', '')">🗑️ ВИДАЛИТИ</button>
+        <button class="btn" style="color:red" onclick="clearAll()">⚠️ ОЧИСТИТИ ВСЕ</button>
     </div>
 
     <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
-
-        // Твоя база данных
-        const firebaseConfig = { databaseURL: "https://map-objects-75fa0-default-rtdb.europe-west1.firebasedatabase.app/" };
-        const app = initializeApp(firebaseConfig);
-        const db = getDatabase(app);
-
-        // Инициализация карты
-        const map = L.map('map', { zoomControl: false }).setView([48.3794, 31.1656], 6);
+    <script>
+        const METER_LAT = 111320;
+        const map = L.map('map', { zoomControl: false }).setView([48.37, 31.16], 6);
         
-        // Используем Voyager слой - он стабильнее всего для GitHub/HTTPS
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OpenStreetMap'
-        }).addTo(map);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-        let activeMode = null, activeIconUrl = '', currentUnit = null, units = [], mapActive = true;
+        let activeMode = null, activeIcon = '', currentUnit = null, units = [];
 
-        // ФИНКС: Делаем функции доступными для HTML кнопок
-        window.setActiveMode = (mode, icon = '', el) => {
-            activeMode = mode; 
-            activeIconUrl = icon; 
-            currentUnit = null;
+        function setMode(mode, icon) {
+            activeMode = mode; activeIcon = icon; currentUnit = null;
             document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
-            if(el) el.classList.add('active');
-        };
+            if(icon || mode === 'del') {
+                if (event && event.currentTarget) event.currentTarget.classList.add('active');
+            }
+        }
 
-Данил, [20.02.2026 17:47]
-window.toggleMapStatus = () => {
-            mapActive = !mapActive;
-            const btn = document.getElementById('statusBtn');
-            btn.innerText = mapActive ? "🟢 КАРТА ОТКРЫТА" : "🔴 КАРТА ЗАКРЫТА";
-            btn.style.background = mapActive ? "#333" : "#ff0000";
-            set(ref(db, 'map_status'), { active: mapActive });
-        };
-
-        window.clearAllData = () => {
-            if(confirm("Удалить все цели?")) {
-                units.forEach(u => { 
-                    map.removeLayer(u.marker); 
-                    if(u.line) map.removeLayer(u.line); 
-                });
-                units = []; 
-                sync();
+        window.clearAll = () => {
+            if(confirm("Видалити всі цілі?")) {
+                units.forEach(u => { map.removeLayer(u.marker); map.removeLayer(u.vector); map.removeLayer(u.trail); });
+                units = [];
             }
         };
-
-        // Синхронизация с Firebase
-        function sync() {
-            const data = units.map(u => ({
-                id: u.id, lat: u.pos.lat, lng: u.pos.lng,
-                targetLat: u.target ? u.target.lat : null,
-                targetLng: u.target ? u.target.lng : null,
-                type: u.type, angle: u.angle || 0, iconUrl: u.iconUrl
-            }));
-            set(ref(db, 'live_units'), data);
-        }
 
         map.on('click', (e) => {
-            if (activeMode === 'delete_one') return;
-            
-            if (activeIconUrl && !currentUnit) {
-                const newUnit = {
-                    id: Date.now(), pos: e.latlng, target: null,
-                    type: activeMode, iconUrl: activeIconUrl, angle: 0
+            if (activeMode === 'del') return;
+
+            if (activeIcon && !currentUnit) {
+                // Використовуємо DivIcon для сумісності з механікою повороту CSS
+                const iconHTML = L.divIcon({
+                    className: 'custom-icon',
+                    html: <img src="${activeIcon}" class="unit-icon" style="transform: rotate(0deg);">,
+                    iconSize: [32, 32], iconAnchor: [16, 16]
+                });
+
+Данил, [20.02.2026 14:34]
+const marker = L.marker(e.latlng, { icon: iconHTML }).addTo(map);
+                const vector = L.polyline([e.latlng, e.latlng], { color: 'blue', weight: 2, dashArray: '5,5' }).addTo(map);
+                const trail = L.polyline([e.latlng], { color: '#FF0000', weight: 5, opacity: 0.6, lineJoin: 'round' }).addTo(map);
+
+                const u = {
+                    id: Date.now(),
+                    marker, vector, trail,
+                    pos: e.latlng,
+                    angle: 0,
+                    speed: 180,
+                    history: [e.latlng],
+                    moving: false
                 };
-                addMarker(newUnit);
-                units.push(newUnit);
-                currentUnit = newUnit;
-                sync();
+
+                marker.on('click', (ev) => {
+                    L.DomEvent.stopPropagation(ev);
+                    if(activeMode === 'del') {
+                        map.removeLayer(marker); map.removeLayer(vector); map.removeLayer(trail);
+                        units = units.filter(x => x.id !== u.id);
+                    } else {
+                        currentUnit = u; 
+                    }
+                });
+
+                units.push(u);
+                currentUnit = u; 
             } else if (currentUnit) {
-                currentUnit.target = e.latlng;
-                currentUnit.angle = Math.atan2(e.latlng.lng - currentUnit.pos.lng, e.latlng.lat - currentUnit.pos.lat) * 180 / Math.PI;
-                updateVisuals(currentUnit);
+                const target = e.latlng;
+                const uAngle = Math.atan2(target.lng - currentUnit.pos.lng, target.lat - currentUnit.pos.lat) * (180 / Math.PI);
+                
+                currentUnit.angle = uAngle;
+                currentUnit.vector.setLatLngs([currentUnit.pos, target]);
+                
+                // Механіка повороту зображення через CSS
+                const img = currentUnit.marker.getElement().querySelector('img');
+                if(img) img.style.transform = rotate(${uAngle}deg);
+                
+                currentUnit.moving = true;
                 currentUnit = null;
-                sync();
             }
         });
 
-        function addMarker(u) {
-            const icon = L.divIcon({
-                className: 'custom-div',
-                html: <img src="${u.iconUrl}" class="unit-icon" style="transform:rotate(${u.angle}deg)" onerror="this.style.background='red'">,
-                iconSize: [30, 30], iconAnchor: [15, 15]
+        setInterval(() => {
+            units.forEach(u => {
+                if (!u.moving) return;
+                const step = (u.speed / 3.6) * 0.1;
+                const rad = u.angle * Math.PI / 180;
+                const curr = u.marker.getLatLng();
+                const dLat = (step * Math.cos(rad)) / METER_LAT;
+                const dLng = (step * Math.sin(rad)) / (METER_LAT * Math.cos(curr.lat * Math.PI / 180));
+                const newPos = L.latLng(curr.lat + dLat, curr.lng + dLng);
+
+                u.pos = newPos;
+                u.marker.setLatLng(newPos);
+                u.history.push(newPos);
+                u.trail.setLatLngs(u.history);
+
+                const vPts = u.vector.getLatLngs();
+                const diffLat = newPos.lat - vPts[0].lat;
+                const diffLng = newPos.lng - vPts[0].lng;
+                u.vector.setLatLngs([
+                    newPos,
+                    L.latLng(vPts[1].lat + diffLat, vPts[1].lng + diffLng)
+                ]);
             });
-
-            u.marker = L.marker(u.pos, { icon: icon, draggable: true }).addTo(map);
-            u.line = L.polyline([u.pos, u.target || u.pos], { color: 'red', weight: 2, dashArray: '5,5', opacity: 0.5 }).addTo(map);
-
-            u.marker.on('drag', (e) => {
-                u.pos = e.latlng;
-                if (u.target) {
-                    u.angle = Math.atan2(u.target.lng - u.pos.lng, u.target.lat - u.pos.lat) * 180 / Math.PI;
-                }
-                updateVisuals(u);
-            });
-
-            u.marker.on('dragend', () => sync());
-
-            u.marker.on('click', (ev) => {
-                L.DomEvent.stopPropagation(ev);
-                if (activeMode === 'delete_one') {
-                    map.removeLayer(u.marker); map.removeLayer(u.line);
-                    units = units.filter(i => i.id !== u.id);
-                    sync();
-                } else {
-                    currentUnit = u;
-                }
-            });
-        }
-
-        function updateVisuals(u) {
-            u.marker.setLatLng(u.pos);
-            u.line.setLatLngs([u.pos, u.target || u.pos]);
-            const img = u.marker.getElement()?.querySelector('img');
-            if (img) img.style.transform = rotate(${u.angle}deg);
-        }
-
-        // Исправляем "рваную" карту при загрузке
-        window.addEventListener('load', () => {
-            setTimeout(() => { map.invalidateSize(); }, 500);
-        });
+        }, 100);
     </script>
 </body>
 </html>
