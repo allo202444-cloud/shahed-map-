@@ -1,21 +1,21 @@
-
+Данил, [20.02.2026 15:03]
 <!DOCTYPE html>
 <html lang="uk">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Адмінка: LIVE CONTROL</title>
+    <title>Адмінка: ПОВНИЙ КОНТРОЛЬ</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <style>
         body, html { margin: 0; padding: 0; height: 100%; font-family: sans-serif; overflow: hidden; background: #000; }
-        #map { height: 100vh; width: 100vw; z-index: 1; }
+        #map { height: 100vh; width: 100vw; z-index: 1; background: #000; }
         
         .panel { 
             position: absolute; top: 10px; right: 10px; z-index: 1000; 
             background: rgba(255, 255, 255, 0.95); padding: 10px; 
             border-radius: 8px; display: flex; flex-direction: column; gap: 5px; 
-            border: 1px solid #333; width: 150px;
+            border: 1px solid #333; width: 160px;
         }
         
         .btn { 
@@ -24,7 +24,7 @@
             display: flex; align-items: center; gap: 8px; border-radius: 4px;
         }
         .btn img { width: 22px; height: 22px; object-fit: contain; }
-        .btn.active { background: #ff4444; color: white; border-color: red; }
+        .btn.active { background: #ff4444 !important; color: white !important; border-color: red; }
         
         .unit-icon { 
             display: block; width: 32px !important; height: 32px !important; 
@@ -36,6 +36,8 @@
 
     <div class="panel">
         <button class="btn" onclick="setMode('sh', 's1.png')"><img src="s1.png"> ШАХЕД</button>
+        <button class="btn" onclick="setMode('zala', 'zala.png')"><img src="zala.png"> ZALA</button>
+        <button class="btn" onclick="setMode('orlan', 'orlan.png')"><img src="orlan.png"> ОРЛАН-10</button>
         <button class="btn" onclick="setMode('kb', 'kab.png')"><img src="kab.png"> КАБ</button>
         <button class="btn" onclick="setMode('su', 'su34.png')"><img src="su34.png"> СУ-34</button>
         <hr style="width:100%">
@@ -55,7 +57,9 @@
         let activeMode = null, activeIcon = '', currentUnit = null, units = [];
 
         function setMode(mode, icon) {
-            activeMode = mode; activeIcon = icon; currentUnit = null;
+            activeMode = mode; 
+            activeIcon = icon; 
+            currentUnit = null;
             document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
             if(event && event.currentTarget) event.currentTarget.classList.add('active');
         }
@@ -75,7 +79,6 @@
             if (activeMode === 'del') return;
 
             if (activeIcon && !currentUnit) {
-                // Создаем маркер через DivIcon для вращения
                 const iconHTML = L.divIcon({
                     className: 'custom-icon',
                     html: <img src="${activeIcon}" class="unit-icon" style="transform: rotate(0deg);">,
@@ -86,7 +89,7 @@
                 const vector = L.polyline([e.latlng, e.latlng], { color: 'blue', weight: 2, dashArray: '5,5' }).addTo(map);
                 const trail = L.polyline([e.latlng], { color: '#FF0000', weight: 5, opacity: 0.6, lineJoin: 'round' }).addTo(map);
 
-Данил, [20.02.2026 14:59]
+Данил, [20.02.2026 15:03]
 const u = {
                     id: Date.now(),
                     marker, vector, trail,
@@ -124,7 +127,6 @@ const u = {
             }
         });
 
-        // Цикл движения
         setInterval(() => {
             units.forEach(u => {
                 if (!u.moving) return;
