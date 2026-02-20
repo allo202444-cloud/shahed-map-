@@ -14,7 +14,7 @@
             position: absolute; top: 10px; right: 10px; z-index: 1000; 
             background: rgba(255, 255, 255, 0.9); padding: 10px; 
             border-radius: 8px; display: flex; flex-direction: column; gap: 5px; 
-            border: 1px solid #333; width: 150px;
+            border: 1px solid #333; width: 160px;
         }
         
         .btn { 
@@ -22,7 +22,7 @@
             border: 1px solid #999; background: #fff; text-align: left;
             display: flex; align-items: center; gap: 5px;
         }
-        .btn img { width: 20px; height: 20px; }
+        .btn img { width: 20px; height: 20px; object-fit: contain; }
         .btn.active { background: #ff4444; color: white; border-color: red; }
         
         .unit-icon { 
@@ -35,8 +35,18 @@
 
     <div class="panel">
         <button class="btn" onclick="setMode('sh', 's1.png')"><img src="s1.png"> ШАХЕД</button>
+        
+        <button class="btn" onclick="setMode('zala', 'https://image2url.com/r2/default/images/1769866607142-afcdd360-ecda-4262-b039-d4bb7969d62f.png')">
+            <img src="https://image2url.com/r2/default/images/1769866607142-afcdd360-ecda-4262-b039-d4bb7969d62f.png"> ZALA
+        </button>
+
+        <button class="btn" onclick="setMode('orlan', 'https://image2url.com/r2/default/images/1770670326543-8141ee72-84e1-4407-b42a-ec65d4df9ca2.png')">
+            <img src="https://image2url.com/r2/default/images/1770670326543-8141ee72-84e1-4407-b42a-ec65d4df9ca2.png"> ОРЛАН-10
+        </button>
+
         <button class="btn" onclick="setMode('kb', 'kab.png')"><img src="kab.png"> КАБ</button>
         <button class="btn" onclick="setMode('su', 'su34.png')"><img src="su34.png"> СУ-34</button>
+        
         <hr style="width:100%">
         <button class="btn" style="color:red" onclick="setMode('del', '')">🗑️ ВИДАЛИТИ</button>
         <button class="btn" style="color:red" onclick="clearAll()">⚠️ ОЧИСТИТИ ВСЕ</button>
@@ -56,7 +66,9 @@
         function setMode(mode, icon) {
             activeMode = mode; activeIcon = icon; currentUnit = null;
             document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
-            if(icon || mode === 'del') event.currentTarget.classList.add('active');
+            if(icon || mode === 'del') {
+                if (event && event.currentTarget) event.currentTarget.classList.add('active');
+            }
         }
 
         window.clearAll = () => {
@@ -70,10 +82,10 @@
             if (activeMode === 'del') return;
 
             if (activeIcon && !currentUnit) {
-                // 1. Ставимо іконку
+                // Використовуємо DivIcon для сумісності з механікою повороту CSS
                 const iconHTML = L.divIcon({
                     className: 'custom-icon',
-                    html: `<img src="${activeIcon}" class="unit-icon">`,
+                    html: `<img src="${activeIcon}" class="unit-icon" style="transform: rotate(0deg);">`,
                     iconSize: [32, 32], iconAnchor: [16, 16]
                 });
 
@@ -97,53 +109,43 @@
                         map.removeLayer(marker); map.removeLayer(vector); map.removeLayer(trail);
                         units = units.filter(x => x.id !== u.id);
                     } else {
-                        currentUnit = u; // Вибираємо для задання вектору
+                        currentUnit = u; 
                     }
                 });
 
                 units.push(u);
                 currentUnit = u; 
             } else if (currentUnit) {
-                // 2. Другий клік — задаємо напрямок (кут)
                 const target = e.latlng;
-                // Математика: міняємо місцями координати для правильної орієнтації на північ
-                uAngle = Math.atan2(target.lng - currentUnit.pos.lng, target.lat - currentUnit.pos.lat) * (180 / Math.PI);
+                const uAngle = Math.atan2(target.lng - currentUnit.pos.lng, target.lat - currentUnit.pos.lat) * (180 / Math.PI);
                 
                 currentUnit.angle = uAngle;
                 currentUnit.vector.setLatLngs([currentUnit.pos, target]);
                 
+                // Механіка повороту зображення через CSS
                 const img = currentUnit.marker.getElement().querySelector('img');
                 if(img) img.style.transform = `rotate(${uAngle}deg)`;
                 
-                currentUnit.moving = true; // Запускаємо рух
+                currentUnit.moving = true;
                 currentUnit = null;
             }
         });
 
-        // Головний цикл руху (10 разів на секунду)
         setInterval(() => {
             units.forEach(u => {
                 if (!u.moving) return;
-
-                const step = (u.speed / 3.6) * 0.1; // Дистанція за 0.1 сек
+                const step = (u.speed / 3.6) * 0.1;
                 const rad = u.angle * Math.PI / 180;
                 const curr = u.marker.getLatLng();
-
-                // Розрахунок нових координат
                 const dLat = (step * Math.cos(rad)) / METER_LAT;
                 const dLng = (step * Math.sin(rad)) / (METER_LAT * Math.cos(curr.lat * Math.PI / 180));
-
                 const newPos = L.latLng(curr.lat + dLat, curr.lng + dLng);
 
-                // Оновлюємо позицію
                 u.pos = newPos;
                 u.marker.setLatLng(newPos);
-                
-                // Оновлюємо червоний слід
                 u.history.push(newPos);
                 u.trail.setLatLngs(u.history);
 
-                // Зміщуємо пунктирний вектор вперед за об'єктом
                 const vPts = u.vector.getLatLngs();
                 const diffLat = newPos.lat - vPts[0].lat;
                 const diffLng = newPos.lng - vPts[0].lng;
@@ -153,7 +155,6 @@
                 ]);
             });
         }, 100);
-
     </script>
 </body>
 </html>
