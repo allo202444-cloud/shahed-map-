@@ -1,3 +1,4 @@
+Данил, [20.02.2026 15:31]
 <!DOCTYPE html>
 <html lang="uk">
 <head>
@@ -22,138 +23,136 @@
             border: 1px solid #999; background: #fff; text-align: left;
             display: flex; align-items: center; gap: 5px;
         }
-        .btn img { width: 20px; height: 20px; }
-        .btn.active { background: #ff4444; color: white; border-color: red; }
-        
-        .unit-icon { 
-            display: block; width: 32px !important; height: 32px !important; 
-            transition: transform 0.1s linear; 
-        }
+        .btn:hover { background: #eee; }
+        .btn img { width: 16px; height: 16px; }
     </style>
 </head>
 <body>
 
     <div class="panel">
-        <button class="btn" onclick="setMode('sh', 's1.png')"><img src="s1.png"> ШАХЕД</button>
-        <button class="btn" onclick="setMode('kb', 'kab.png')"><img src="kab.png"> КАБ</button>
-        <button class="btn" onclick="setMode('su', 'su34.png')"><img src="su34.png"> СУ-34</button>
-        <hr style="width:100%">
-        <button class="btn" style="color:red" onclick="setMode('del', '')">🗑️ ВИДАЛИТИ</button>
-        <button class="btn" style="color:red" onclick="clearAll()">⚠️ ОЧИСТИТИ ВСЕ</button>
+        <div class="btn" onclick="selectType('shahed', 'shahed.png')">
+            <img src="shahed.png"> Shahed
+        </div>
+        
+        <div class="btn" onclick="selectType('supercam', 'supercam.png')">
+            <img src="supercam.png"> Суперкам
+        </div>
+        
+        <div class="btn" onclick="selectType('zala', 'zala.png')">
+            <img src="zala.png"> Зала
+        </div>
+        
+        <div class="btn" onclick="selectType('orlan', 'orlan.png')">
+            <img src="orlan.png"> Орлан
+        </div>
     </div>
 
     <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        const METER_LAT = 111320;
         const map = L.map('map', { zoomControl: false }).setView([48.37, 31.16], 6);
-        
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-        let activeMode = null, activeIcon = '', currentUnit = null, units = [];
+        let selectedType = null;
+        let selectedIcon = null;
+        let currentUnit = null;
+        let units = [];
 
-        function setMode(mode, icon) {
-            activeMode = mode; activeIcon = icon; currentUnit = null;
-            document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
-            if(icon || mode === 'del') event.currentTarget.classList.add('active');
+        const METER_LAT = 111111;
+
+        function selectType(type, icon) {
+            selectedType = type;
+            selectedIcon = icon;
         }
 
-        window.clearAll = () => {
-            if(confirm("Видалити всі цілі?")) {
-                units.forEach(u => { map.removeLayer(u.marker); map.removeLayer(u.vector); map.removeLayer(u.trail); });
-                units = [];
-            }
-        };
-
         map.on('click', (e) => {
-            if (activeMode === 'del') return;
+            if (!selectedType) return;
 
-            if (activeIcon && !currentUnit) {
-                // 1. Ставимо іконку
-                const iconHTML = L.divIcon({
-                    className: 'custom-icon',
-                    html: `<img src="${activeIcon}" class="unit-icon">`,
-                    iconSize: [32, 32], iconAnchor: [16, 16]
+            if (!currentUnit) {
+                // Крок 1: Створюємо маркер у точці кліку
+                const unitId = Date.now();
+                const icon = L.icon({
+                    iconUrl: selectedIcon,
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16]
                 });
 
-                const marker = L.marker(e.latlng, { icon: iconHTML }).addTo(map);
-                const vector = L.polyline([e.latlng, e.latlng], { color: 'blue', weight: 2, dashArray: '5,5' }).addTo(map);
-                const trail = L.polyline([e.latlng], { color: '#FF0000', weight: 5, opacity: 0.6, lineJoin: 'round' }).addTo(map);
+                const marker = L.marker(e.latlng, { icon: icon }).addTo(map);
+                
+                // Створюємо пунктирний вектор
+                const vector = L.polyline([e.latlng, e.latlng], {
+                    color: '#333', weight: 2, dashArray: '5, 10', opacity: 0.5
+                }).addTo(map);
 
-                const u = {
-                    id: Date.now(),
-                    marker, vector, trail,
+                // Створюємо червоний слід
+                const trail = L.polyline([e.latlng], {
+                    color: 'red', weight: 3, opacity: 0.6
+                }).addTo(map);
+
+                currentUnit = {
+                    id: unitId,
+                    type: selectedType,
+                    marker: marker,
+                    vector: vector,
+                    trail: trail,
                     pos: e.latlng,
-                    angle: 0,
-                    speed: 180,
                     history: [e.latlng],
+                    angle: 0,
+                    speed: 150,
                     moving: false
                 };
-
-                marker.on('click', (ev) => {
-                    L.DomEvent.stopPropagation(ev);
-                    if(activeMode === 'del') {
-                        map.removeLayer(marker); map.removeLayer(vector); map.removeLayer(trail);
-                        units = units.filter(x => x.id !== u.id);
-                    } else {
-                        currentUnit = u; // Вибираємо для задання вектору
-                    }
-                });
-
-                units.push(u);
-                currentUnit = u; 
-            } else if (currentUnit) {
-                // 2. Другий клік — задаємо напрямок (кут)
-                const target = e.latlng;
-                // Математика: міняємо місцями координати для правильної орієнтації на північ
-                uAngle = Math.atan2(target.lng - currentUnit.pos.lng, target.lat - currentUnit.pos.lat) * (180 / Math.PI);
                 
-                currentUnit.angle = uAngle;
-                currentUnit.vector.setLatLngs([currentUnit.pos, target]);
+                units.push(currentUnit);
+            } else {
+                // Крок 2: Другий клік задає кут
+                const start = currentUnit.pos;
+                const end = e.latlng;
                 
-                const img = currentUnit.marker.getElement().querySelector('img');
-                if(img) img.style.transform = `rotate(${uAngle}deg)`;
+                const angleRad = Math.atan2(end.lng - start.lng, end.lat - start.lat);
+                const angleDeg = angleRad * 180 / Math.PI;
+                const uAngle = (angleDeg + 360) % 360;
+
+Данил, [20.02.2026 15:31]
+currentUnit.angle = uAngle;
+                
+                // Повертаємо іконку
+                const markerImg = currentUnit.marker.getElement();
+                if (markerImg) {
+                    markerImg.style.transform +=  rotate(${uAngle}deg);
+                }
                 
                 currentUnit.moving = true; // Запускаємо рух
                 currentUnit = null;
             }
         });
 
-        // Головний цикл руху (10 разів на секунду)
+        // Головний цикл руху
         setInterval(() => {
             units.forEach(u => {
                 if (!u.moving) return;
 
-                const step = (u.speed / 3.6) * 0.1; // Дистанція за 0.1 сек
+                const step = (u.speed / 3.6) * 0.1; 
                 const rad = u.angle * Math.PI / 180;
                 const curr = u.marker.getLatLng();
 
-                // Розрахунок нових координат
                 const dLat = (step * Math.cos(rad)) / METER_LAT;
                 const dLng = (step * Math.sin(rad)) / (METER_LAT * Math.cos(curr.lat * Math.PI / 180));
 
                 const newPos = L.latLng(curr.lat + dLat, curr.lng + dLng);
 
-                // Оновлюємо позицію
                 u.pos = newPos;
                 u.marker.setLatLng(newPos);
                 
-                // Оновлюємо червоний слід
                 u.history.push(newPos);
                 u.trail.setLatLngs(u.history);
 
-                // Зміщуємо пунктирний вектор вперед за об'єктом
                 const vPts = u.vector.getLatLngs();
                 const diffLat = newPos.lat - vPts[0].lat;
                 const diffLng = newPos.lng - vPts[0].lng;
-                u.vector.setLatLngs([
-                    newPos,
-                    L.latLng(vPts[1].lat + diffLat, vPts[1].lng + diffLng)
-                ]);
+                u.vector.setLatLngs(vPts.map(p => L.latLng(p.lat + diffLat, p.lng + diffLng)));
             });
         }, 100);
-
     </script>
 </body>
 </html>
