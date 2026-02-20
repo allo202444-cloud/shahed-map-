@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Адмінка: Авто-рух та слід</title>
+    <title>Адмінка: LIVE CONTROL</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
@@ -14,16 +14,15 @@
             position: absolute; top: 10px; right: 10px; z-index: 1000; 
             background: rgba(255, 255, 255, 0.95); padding: 10px; 
             border-radius: 8px; display: flex; flex-direction: column; gap: 5px; 
-            border: 1px solid #333; width: 160px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            border: 1px solid #333; width: 150px;
         }
         
         .btn { 
             cursor: pointer; padding: 8px; font-weight: bold; font-size: 11px; 
             border: 1px solid #999; background: #fff; text-align: left;
-            display: flex; align-items: center; gap: 8px; border-radius: 4px;
+            display: flex; align-items: center; gap: 8px;
         }
         .btn img { width: 22px; height: 22px; object-fit: contain; }
-        .btn:hover { background: #f0f0f0; }
         .btn.active { background: #ff4444; color: white; border-color: red; }
         
         .unit-icon { 
@@ -36,12 +35,9 @@
 
     <div class="panel">
         <button class="btn" onclick="setMode('sh', 's1.png')"><img src="s1.png"> ШАХЕД</button>
-        <button class="btn" onclick="setMode('zala', 'zala.png')"><img src="zala.png"> ZALA</button>
-        <button class="btn" onclick="setMode('orlan', 'orlan.png')"><img src="orlan.png"> ОРЛАН-10</button>
         <button class="btn" onclick="setMode('kb', 'kab.png')"><img src="kab.png"> КАБ</button>
         <button class="btn" onclick="setMode('su', 'su34.png')"><img src="su34.png"> СУ-34</button>
-        
-        <hr style="width:100%; border: 0; border-top: 1px solid #ccc;">
+        <hr style="width:100%">
         <button class="btn" style="color:red" onclick="setMode('del', '')">🗑️ ВИДАЛИТИ</button>
         <button class="btn" style="color:red" onclick="clearAll()">⚠️ ОЧИСТИТИ ВСЕ</button>
     </div>
@@ -52,7 +48,6 @@
     <script>
         const METER_LAT = 111320;
         const map = L.map('map', { zoomControl: false }).setView([48.37, 31.16], 6);
-        
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
         let activeMode = null, activeIcon = '', currentUnit = null, units = [];
@@ -75,7 +70,7 @@
 
             if (activeIcon && !currentUnit) {
                 const iconHTML = L.divIcon({
-                    className: 'custom-icon',
+                    className: 'u-wrap',
                     html: `<img src="${activeIcon}" class="unit-icon" style="transform: rotate(0deg);">`,
                     iconSize: [32, 32], iconAnchor: [16, 16]
                 });
@@ -99,9 +94,7 @@
                     if(activeMode === 'del') {
                         map.removeLayer(marker); map.removeLayer(vector); map.removeLayer(trail);
                         units = units.filter(x => x.id !== u.id);
-                    } else {
-                        currentUnit = u; 
-                    }
+                    } else { currentUnit = u; }
                 });
 
                 units.push(u);
@@ -109,13 +102,10 @@
             } else if (currentUnit) {
                 const target = e.latlng;
                 const uAngle = Math.atan2(target.lng - currentUnit.pos.lng, target.lat - currentUnit.pos.lat) * (180 / Math.PI);
-                
                 currentUnit.angle = uAngle;
                 currentUnit.vector.setLatLngs([currentUnit.pos, target]);
-                
                 const img = currentUnit.marker.getElement().querySelector('img');
                 if(img) img.style.transform = `rotate(${uAngle}deg)`;
-                
                 currentUnit.moving = true;
                 currentUnit = null;
             }
@@ -130,12 +120,10 @@
                 const dLat = (step * Math.cos(rad)) / METER_LAT;
                 const dLng = (step * Math.sin(rad)) / (METER_LAT * Math.cos(curr.lat * Math.PI / 180));
                 const newPos = L.latLng(curr.lat + dLat, curr.lng + dLng);
-
                 u.pos = newPos;
                 u.marker.setLatLng(newPos);
                 u.history.push(newPos);
                 u.trail.setLatLngs(u.history);
-
                 const vPts = u.vector.getLatLngs();
                 const diffLat = newPos.lat - vPts[0].lat;
                 const diffLng = newPos.lng - vPts[0].lng;
